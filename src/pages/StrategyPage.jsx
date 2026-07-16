@@ -176,6 +176,13 @@ function CardModal({ card, column, alumContacts, onClose, onSaved }) {
     onSaved()
   }
 
+  async function archive() {
+    if (!card.contact_id) return
+    await supabase.from('contacts').update({ is_active: false }).eq('id', card.contact_id)
+    await supabase.from('strategy_cards').delete().eq('id', card.id)
+    onSaved()
+  }
+
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 460 }}>
@@ -244,11 +251,25 @@ function CardModal({ card, column, alumContacts, onClose, onSaved }) {
 
         {isEdit && <LinksSection cardId={card.id} />}
 
-        <div className="modal-actions">
-          <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={save} disabled={saving || (!name.trim() && !selectedContactId)}>
-            {saving ? 'Saving…' : (isEdit ? 'Save changes' : 'Add')}
-          </button>
+        <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
+          <div>
+            {isEdit && card.contact_id && (
+              <button
+                className="btn"
+                style={{ background: '#FAEEDA', color: '#633806', borderColor: '#E8C27A' }}
+                onClick={archive}
+                title="Mark inactive in Referral details and remove from Strategy"
+              >
+                <i className="ti ti-archive" style={{ fontSize: 12 }} /> Archive
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn" onClick={onClose}>Cancel</button>
+            <button className="btn btn-primary" onClick={save} disabled={saving || (!name.trim() && !selectedContactId)}>
+              {saving ? 'Saving…' : (isEdit ? 'Save changes' : 'Add')}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -517,6 +538,8 @@ export default function StrategyPage() {
   const [showAddColumn, setShowAddColumn] = useState(false)
   const [todoCard, setTodoCard] = useState(null)
   const [showBanner, setShowBanner] = useState(false)
+  const [archivedContacts, setArchivedContacts] = useState([])
+  const [showArchive, setShowArchive] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -526,7 +549,7 @@ export default function StrategyPage() {
       supabase.from('strategy_columns').select('*').order('position').order('created_at'),
       supabase.from('strategy_cards').select('*, strategy_card_todos(id, completed), strategy_card_links(id, done)').order('position').order('created_at'),
       supabase.from('strategy_banner').select('*').order('step_number'),
-      supabase.from('contacts').select('id, name, company, referral_status').eq('is_active', true),
+      supabase.from('contacts').select('id, name, company, referral_status, is_active').order('name'),
     ])
     // Filter alum contacts by Babson Alum tag
     const { data: tagRow } = await supabase.from('tags').select('id').eq('name', 'Babson Alum').single()
@@ -535,10 +558,12 @@ export default function StrategyPage() {
       const { data: ct } = await supabase.from('contact_tags').select('contact_id').eq('tag_id', tagRow.id)
       alumIds = new Set((ct || []).map(r => r.contact_id))
     }
+    const allContacts = cts || []
     setColumns(cols || [])
     setCards(cds || [])
     setBanner(ban || [])
-    setAlumContacts((cts || []).filter(c => alumIds.has(c.id)))
+    setAlumContacts(allContacts.filter(c => c.is_active && alumIds.has(c.id)))
+    setArchivedContacts(allContacts.filter(c => !c.is_active))
     setLoading(false)
   }
 
@@ -572,6 +597,46 @@ export default function StrategyPage() {
           </button>
         </div>
       </div>
+
+      {/* Archive section */}
+      {archivedContacts.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <button
+            onClick={() => setShowArchive(s => !s)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text2)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 0', fontWeight: 500, marginBottom: showArchive ? 10 : 0 }}
+          >
+            <i className={'ti ti-chevron-' + (showArchive ? 'down' : 'right')} style={{ fontSize: 13 }} />
+            <i className="ti ti-archive" style={{ fontSize: 13, color: '#BA7517' }} />
+            Archived contacts ({archivedContacts.length})
+          </button>
+          {showArchive && (
+            <div style={{ background: 'var(--surface2)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '10px 12px' }}>
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 10 }}>
+                These contacts are marked inactive on Referral details. Unarchive to restore them.
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {archivedContacts.map(c => (
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius)', padding: '8px 12px' }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)' }}>{c.name}</div>
+                      {c.company && <div style={{ fontSize: 11, color: 'var(--text3)' }}>{c.company}</div>}
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await supabase.from('contacts').update({ is_active: true }).eq('id', c.id)
+                        load()
+                      }}
+                      style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '0.5px solid #1D9E75', background: '#EAF3DE', color: '#27500A', cursor: 'pointer' }}
+                    >
+                      <i className="ti ti-arrow-back-up" style={{ fontSize: 11 }} /> Unarchive
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Priority banner */}
       <div style={{
