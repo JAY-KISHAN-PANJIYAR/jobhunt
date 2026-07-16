@@ -615,23 +615,37 @@ export default function StrategyPage() {
                 These contacts are marked inactive on Referral details. Unarchive to restore them.
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {archivedContacts.map(c => (
-                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius)', padding: '8px 12px' }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)' }}>{c.name}</div>
-                      {c.company && <div style={{ fontSize: 11, color: 'var(--text3)' }}>{c.company}</div>}
+                {archivedContacts.map(c => {
+                  const matchedCard = cards.find(card => card.contact_id === c.id)
+                  const matchedCol = matchedCard ? columns.find(col => col.id === matchedCard.column_id) : columns[0]
+                  return (
+                    <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius)', padding: '8px 12px' }}>
+                      <div
+                        onClick={() => {
+                          if (matchedCard && matchedCol) {
+                            setEditingCard({ card: matchedCard, column: matchedCol })
+                          }
+                        }}
+                        style={{ flex: 1, cursor: matchedCard ? 'pointer' : 'default' }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                          {c.name}
+                          {matchedCard && <i className="ti ti-external-link" style={{ fontSize: 10, color: 'var(--text3)' }} />}
+                        </div>
+                        {c.company && <div style={{ fontSize: 11, color: 'var(--text3)' }}>{c.company}</div>}
+                      </div>
+                      <button
+                        onClick={async () => {
+                          await supabase.from('contacts').update({ is_active: true }).eq('id', c.id)
+                          load()
+                        }}
+                        style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '0.5px solid #1D9E75', background: '#EAF3DE', color: '#27500A', cursor: 'pointer', flexShrink: 0 }}
+                      >
+                        <i className="ti ti-arrow-back-up" style={{ fontSize: 11 }} /> Unarchive
+                      </button>
                     </div>
-                    <button
-                      onClick={async () => {
-                        await supabase.from('contacts').update({ is_active: true }).eq('id', c.id)
-                        load()
-                      }}
-                      style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '0.5px solid #1D9E75', background: '#EAF3DE', color: '#27500A', cursor: 'pointer' }}
-                    >
-                      <i className="ti ti-arrow-back-up" style={{ fontSize: 11 }} /> Unarchive
-                    </button>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}
