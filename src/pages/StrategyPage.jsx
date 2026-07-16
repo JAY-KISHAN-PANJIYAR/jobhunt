@@ -1,4 +1,5 @@
 import BannerReminder from '../components/BannerReminder.jsx'
+import ContactModal from '../components/ContactModal.jsx'
 import { useState, useEffect, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
 import { supabase } from '../lib/supabase.js'
@@ -540,16 +541,19 @@ export default function StrategyPage() {
   const [showBanner, setShowBanner] = useState(false)
   const [archivedContacts, setArchivedContacts] = useState([])
   const [showArchive, setShowArchive] = useState(false)
+  const [viewingArchived, setViewingArchived] = useState(null)
+  const [tags, setTags] = useState([])
 
   useEffect(() => { load() }, [])
 
   async function load() {
     setLoading(true)
-    const [{ data: cols }, { data: cds }, { data: ban }, { data: cts }] = await Promise.all([
+    const [{ data: cols }, { data: cds }, { data: ban }, { data: cts }, { data: tgs }] = await Promise.all([
       supabase.from('strategy_columns').select('*').order('position').order('created_at'),
       supabase.from('strategy_cards').select('*, strategy_card_todos(id, completed), strategy_card_links(id, done)').order('position').order('created_at'),
       supabase.from('strategy_banner').select('*').order('step_number'),
       supabase.from('contacts').select('id, name, company, referral_status, is_active').order('name'),
+      supabase.from('tags').select('*').order('name'),
     ])
     // Filter alum contacts by Babson Alum tag
     const { data: tagRow } = await supabase.from('tags').select('id').eq('name', 'Babson Alum').single()
@@ -564,6 +568,7 @@ export default function StrategyPage() {
     setBanner(ban || [])
     setAlumContacts(allContacts.filter(c => c.is_active && alumIds.has(c.id)))
     setArchivedContacts(allContacts.filter(c => !c.is_active))
+    setTags(tgs || [])
     setLoading(false)
   }
 
@@ -621,16 +626,15 @@ export default function StrategyPage() {
                   return (
                     <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius)', padding: '8px 12px' }}>
                       <div
-                        onClick={() => {
-                          if (matchedCard && matchedCol) {
-                            setEditingCard({ card: matchedCard, column: matchedCol })
-                          }
+                        onClick={async () => {
+                          const { data: full } = await supabase.from('contacts').select('*, contact_tags(tag_id)').eq('id', c.id).single()
+                          if (full) setViewingArchived(full)
                         }}
-                        style={{ flex: 1, cursor: matchedCard ? 'pointer' : 'default' }}
+                        style={{ flex: 1, cursor: 'pointer' }}
                       >
                         <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 5 }}>
                           {c.name}
-                          {matchedCard && <i className="ti ti-external-link" style={{ fontSize: 10, color: 'var(--text3)' }} />}
+                          <i className="ti ti-external-link" style={{ fontSize: 10, color: 'var(--text3)' }} />
                         </div>
                         {c.company && <div style={{ fontSize: 11, color: 'var(--text3)' }}>{c.company}</div>}
                       </div>
@@ -785,6 +789,14 @@ export default function StrategyPage() {
       )}
       {todoCard && (
         <CardTodoModal card={todoCard} onClose={() => setTodoCard(null)} />
+      )}
+      {viewingArchived && (
+        <ContactModal
+          contact={viewingArchived}
+          tags={tags}
+          onClose={() => setViewingArchived(null)}
+          onSaved={() => { setViewingArchived(null); load() }}
+        />
       )}
       {showBanner && (
         <BannerModal steps={banner} onClose={() => setShowBanner(false)} onSaved={() => { setShowBanner(false); load() }} />
