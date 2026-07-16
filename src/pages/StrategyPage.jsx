@@ -180,7 +180,7 @@ function CardModal({ card, column, alumContacts, onClose, onSaved }) {
   async function archive() {
     if (!card.contact_id) return
     await supabase.from('contacts').update({ is_active: false }).eq('id', card.contact_id)
-    await supabase.from('strategy_cards').delete().eq('id', card.id)
+    await supabase.from('strategy_cards').update({ archived: true }).eq('id', card.id)
     onSaved()
   }
 
@@ -567,7 +567,15 @@ export default function StrategyPage() {
     setCards(cds || [])
     setBanner(ban || [])
     setAlumContacts(allContacts.filter(c => c.is_active && alumIds.has(c.id)))
-    setArchivedContacts(allContacts.filter(c => !c.is_active))
+    const archivedCards = (cds || []).filter(c => c.archived)
+    const archivedFromCards = archivedCards.map(c => ({
+      id: c.contact_id || c.id,
+      contact_id: c.contact_id,
+      name: c.name,
+      company: c.company,
+      _cardId: c.id,
+    })).filter(c => c.name)
+    setArchivedContacts(archivedFromCards)
     setTags(tgs || [])
     setLoading(false)
   }
@@ -641,6 +649,7 @@ export default function StrategyPage() {
                       <button
                         onClick={async () => {
                           await supabase.from('contacts').update({ is_active: true }).eq('id', c.id)
+                          await supabase.from('strategy_cards').update({ archived: false }).eq('contact_id', c.id)
                           load()
                         }}
                         style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '0.5px solid #1D9E75', background: '#EAF3DE', color: '#27500A', cursor: 'pointer', flexShrink: 0 }}
@@ -686,7 +695,7 @@ export default function StrategyPage() {
       {/* Kanban board */}
       <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8 }}>
         {columns.map(col => {
-          const colCards = cards.filter(c => c.column_id === col.id)
+          const colCards = cards.filter(c => c.column_id === col.id && !c.archived)
           return (
             <div key={col.id} style={{
               minWidth: 240, width: 240, background: 'var(--surface2)',
