@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { initials, avatarColor } from '../lib/utils.js'
 import { format, parseISO } from 'date-fns'
+import * as XLSX from 'xlsx'
 
 function fmt(d) {
   if (!d) return '—'
@@ -176,6 +177,29 @@ export default function LeadsPage() {
     return Array.from(set).sort()
   }, [leads])
 
+  function exportExcel() {
+    const STATUS_LABEL = { cold: 'Cold', warm: 'Warm', bounced: 'Bounced' }
+    const rows = filtered.map(l => ({
+      'Name': l.name || '',
+      'Company': l.company || '',
+      'Email': l.email || '',
+      'Status': STATUS_LABEL[l.lead_status] || l.lead_status || '',
+      'Lead added': l.lead_added_date || '',
+      'Reached out': l.reached_out_date || '',
+      'Last contact': l.last_contact || '',
+      'Notes': l.notes || '',
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    // Auto-size columns based on content
+    const headers = Object.keys(rows[0] || { Name: '' })
+    ws['!cols'] = headers.map(h => ({
+      wch: Math.min(50, Math.max(h.length, ...rows.map(r => String(r[h] || '').length)) + 2)
+    }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Leads')
+    XLSX.writeFile(wb, `leads_${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
+  }
+
   const stats = useMemo(() => ({
     companies: new Set(leads.map(l => l.company).filter(Boolean)).size,
     total: leads.length,
@@ -214,9 +238,14 @@ export default function LeadsPage() {
           <i className="ti ti-users" style={{ marginRight: 8, fontSize: 20 }} />
           Leads
         </h1>
-        <button className="btn btn-primary" onClick={() => { setEditing(null); setShowModal(true) }}>
-          <i className="ti ti-plus" /> Add lead
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={exportExcel} disabled={filtered.length === 0} title="Download the leads below as an Excel file">
+            <i className="ti ti-file-spreadsheet" /> Export Excel
+          </button>
+          <button className="btn btn-primary" onClick={() => { setEditing(null); setShowModal(true) }}>
+            <i className="ti ti-plus" /> Add lead
+          </button>
+        </div>
       </div>
 
       {/* Stats — 4 cards */}
